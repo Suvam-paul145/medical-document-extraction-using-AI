@@ -1,0 +1,328 @@
+# Implementation Plan
+
+- [ ] 1. Set up project structure and development environment
+  - Initialize React TypeScript project with Vite or Create React App
+  - Configure TailwindCSS and PostCSS
+  - Install and configure Framer Motion for animations
+  - Set up ESLint, Prettier, and TypeScript strict mode
+  - Create folder structure (components, hooks, services, types, utils)
+  - Initialize backend project (Node.js/Express or Python/FastAPI)
+  - Set up environment variables configuration
+  - _Requirements: 1.1, 1.2_
+
+- [ ] 2. Implement core data models and TypeScript interfaces
+  - Create TypeScript interfaces for PatientDemographics, Medication, Diagnosis, LabResult, VitalSign
+  - Create interfaces for ProcessingState, ExtractionResult, ActivityLogEntry
+  - Create interfaces for API requests and responses
+  - Create error type definitions and error response interfaces
+  - Create WebSocket event type definitions
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [ ] 3. Set up backend infrastructure
+  - [ ] 3.1 Configure database connection and create schema
+    - Set up PostgreSQL connection with connection pooling
+    - Create migration files for documents, extraction_results, and processing_jobs tables
+    - Run migrations to create database schema
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [ ] 3.2 Set up Redis for caching and real-time data
+    - Configure Redis connection
+    - Create Redis client wrapper with error handling
+    - Implement cache helper functions (get, set, delete)
+    - _Requirements: 2.1, 2.2, 2.3_
+  - [ ] 3.3 Configure file storage system
+    - Set up local file storage or AWS S3 client
+    - Create file upload utilities with path generation
+    - Implement file validation functions (type, size checking)
+    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+  - [ ] 3.4 Set up job queue system
+    - Configure Bull (Node.js) or Celery (Python) job queue
+    - Create job queue connection and worker setup
+    - Implement job retry logic with exponential backoff
+    - _Requirements: 1.5, 7.3_
+
+- [ ] 4. Build document upload API and validation
+  - [ ] 4.1 Create upload endpoint with file validation
+    - Implement POST /api/documents/upload endpoint
+    - Add multipart form data parsing middleware
+    - Validate file format (PDF, JPEG, PNG) and size (max 10MB)
+    - Generate unique document ID and store file
+    - Create database record for uploaded document
+    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+  - [ ] 4.2 Implement upload error handling
+    - Create validation error responses with specific messages
+    - Handle file storage errors gracefully
+    - Return structured error responses
+    - _Requirements: 1.4, 7.2_
+  - [ ] 4.3 Create job queue integration for processing
+    - Enqueue processing job after successful upload
+    - Return job ID and queue position to client
+    - Store job metadata in database
+    - _Requirements: 1.5_
+
+- [ ] 5. Implement WebSocket server for real-time updates
+  - [ ] 5.1 Set up WebSocket server
+    - Configure Socket.io or native WebSocket server
+    - Implement connection handling and authentication
+    - Create room-based subscriptions for document updates
+    - _Requirements: 2.1, 2.2, 2.3_
+  - [ ] 5.2 Implement event emission system
+    - Create event emitter functions for all processing stages
+    - Implement processing:started, processing:stage, processing:activity events
+    - Implement processing:item-extracted and processing:completed events
+    - Implement processing:error event with error details
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 6.1, 6.2, 6.3_
+  - [ ] 5.3 Add client subscription management
+    - Handle subscribe and unsubscribe events from clients
+    - Manage active connections and cleanup on disconnect
+    - Implement reconnection handling
+    - _Requirements: 2.1, 2.2_
+
+- [ ] 6. Build extraction agent and AI processing pipeline
+  - [ ] 6.1 Create document loader and preprocessor
+    - Implement PDF text extraction using pdf-parse or PyPDF2
+    - Implement image preprocessing for OCR (resize, enhance contrast)
+    - Handle multi-page documents
+    - _Requirements: 1.1, 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [ ] 6.2 Integrate OCR engine
+    - Set up Tesseract OCR or Google Cloud Vision API client
+    - Implement OCR processing with error handling
+    - Extract text from image-based documents
+    - Emit processing:stage event for OCR stage
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [ ] 6.3 Implement LLM-based entity extraction
+    - Configure OpenAI GPT-4 or Anthropic Claude API client
+    - Create extraction prompts for medical entities
+    - Parse LLM responses into structured data format
+    - Extract patient demographics, medications, diagnoses, lab results, vital signs
+    - Calculate confidence scores for each extracted field
+    - Emit processing:item-extracted events as items are found
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [ ] 6.4 Implement extraction validation and quality checks
+    - Validate extracted data format and completeness
+    - Flag low-confidence extractions (below 80%)
+    - Verify data consistency (dates, units, ranges)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 4.3_
+  - [ ] 6.5 Create processing job orchestrator
+    - Implement job worker that processes queued documents
+    - Coordinate all processing stages (OCR → Analysis → Extraction → Validation)
+    - Update job status and progress in database
+    - Emit WebSocket events at each stage
+    - Handle errors and implement retry logic
+    - Save extraction results to database
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 6.1, 6.2, 6.3, 7.1, 7.3, 7.5_
+
+- [ ] 7. Create frontend state management and API integration
+  - [ ] 7.1 Set up state management
+    - Configure Zustand or Redux store
+    - Create slices/stores for documents, processing, and extraction results
+    - Implement actions for upload, processing updates, and result fetching
+    - _Requirements: 1.1, 2.1, 4.1_
+  - [ ] 7.2 Implement API service layer
+    - Create axios or fetch-based API client
+    - Implement uploadDocument function with progress tracking
+    - Implement getExtractionResult function
+    - Implement exportData function for JSON, CSV, PDF formats
+    - Add error handling and retry logic
+    - _Requirements: 1.1, 1.2, 8.1, 8.2, 8.3, 8.4_
+  - [ ] 7.3 Implement WebSocket client integration
+    - Create WebSocket client connection manager
+    - Implement event listeners for all server events
+    - Update state store when receiving WebSocket events
+    - Handle reconnection and connection errors
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+
+- [ ] 8. Build document upload UI component
+  - [ ] 8.1 Create drag-and-drop upload zone
+    - Implement drag-and-drop area with hover state
+    - Add file input with click-to-browse functionality
+    - Display file type and size restrictions
+    - Show animated border and scale effect on drag-over
+    - _Requirements: 1.1, 1.2, 5.1, 5.3_
+  - [ ] 8.2 Implement file validation and preview
+    - Validate file format and size on client side
+    - Display error messages for invalid files with shake animation
+    - Show thumbnail previews for uploaded files
+    - Display file metadata (name, size, type)
+    - _Requirements: 1.2, 1.3, 1.4, 5.3, 7.2_
+  - [ ] 8.3 Add upload progress indicator
+    - Create animated progress bar with percentage display
+    - Show upload speed and estimated time remaining
+    - Implement smooth progress bar fill animation
+    - Add completion animation when upload finishes
+    - _Requirements: 2.1, 2.4, 5.1, 5.3_
+  - [ ] 8.4 Implement multiple file queue management
+    - Display list of queued files with status indicators
+    - Show queue position for each file
+    - Allow file removal from queue before processing
+    - _Requirements: 1.5_
+
+- [ ] 9. Build processing visualization component
+  - [ ] 9.1 Create multi-stage progress indicator
+    - Design stage indicator UI (Upload → OCR → Analysis → Extraction → Validation)
+    - Implement stage completion animations with check marks
+    - Add pulsing effect for active stage
+    - Show smooth transitions between stages
+    - _Requirements: 2.1, 2.2, 2.3, 5.1, 5.2, 6.1, 6.4_
+  - [ ] 9.2 Implement progress tracking and time estimation
+    - Display overall progress percentage (0-100)
+    - Calculate and show estimated time remaining
+    - Update progress smoothly with easing animations
+    - _Requirements: 2.1, 2.2, 2.4_
+  - [ ] 9.3 Create activity log panel
+    - Display real-time activity feed of extraction events
+    - Show timestamps and action descriptions
+    - Add icons for different activity types
+    - Implement auto-scroll to latest activity
+    - Animate new activity entries with slide-in effect
+    - _Requirements: 2.3, 6.3_
+  - [ ] 9.4 Build animated item counter
+    - Display count of extracted items by category
+    - Implement animated count-up effect as items are extracted
+    - Show category icons and labels
+    - Update counts in real-time via WebSocket
+    - _Requirements: 2.3, 6.5_
+  - [ ] 9.5 Create document preview with highlight overlay
+    - Display document preview in processing view
+    - Implement animated highlight overlay for regions being processed
+    - Synchronize highlights with extraction events
+    - Add smooth scroll to highlighted regions
+    - _Requirements: 6.2_
+
+- [ ] 10. Build extraction results display component
+  - [ ] 10.1 Create organized results layout
+    - Design tabbed or accordion layout for data categories
+    - Create sections for Patient Info, Medications, Diagnoses, Lab Results, Vital Signs
+    - Implement smooth section transitions
+    - Add expand/collapse animations
+    - _Requirements: 4.1, 5.1, 5.2_
+  - [ ] 10.2 Implement confidence indicators
+    - Create color-coded confidence badges (green >80%, yellow 60-80%, red <60%)
+    - Display confidence percentage for each field
+    - Add warning icons for low-confidence fields
+    - Implement animated confidence meter
+    - _Requirements: 4.2, 4.3_
+  - [ ] 10.3 Add inline editing functionality
+    - Make extracted fields editable on click
+    - Implement input validation for edited values
+    - Save edited values to state
+    - Show save confirmation animation
+    - _Requirements: 4.4_
+  - [ ] 10.4 Create side-by-side document view
+    - Display original document alongside extracted data
+    - Implement synchronized scrolling between views
+    - Highlight source text when hovering over extracted field
+    - Add toggle to switch between side-by-side and stacked layouts
+    - _Requirements: 4.5_
+  - [ ] 10.5 Implement staggered item reveal animation
+    - Animate extracted items appearing one by one
+    - Use stagger effect with 50ms delay between items
+    - Add slide-from-left animation with fade-in
+    - Trigger animations when results load
+    - _Requirements: 5.1, 5.2_
+
+- [ ] 11. Create reusable animation components
+  - [ ] 11.1 Build core animation components
+    - Create PulseLoader component with pulsing animation
+    - Create ProgressRing component with circular progress
+    - Create StaggeredList component with stagger children animation
+    - Create ConfidenceMeter component with animated fill
+    - Create CountUp component with number animation
+    - _Requirements: 5.1, 5.2, 5.3_
+  - [ ] 11.2 Implement panel and overlay animations
+    - Create SlidePanel component with spring animation
+    - Create HighlightOverlay component for document highlights
+    - Create FadeTransition component for smooth fades
+    - Add accessibility support for prefers-reduced-motion
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+
+- [ ] 12. Implement error handling and display
+  - [ ] 12.1 Create error display components
+    - Build error message component with icon and description
+    - Add expandable error details section
+    - Implement shake animation for validation errors
+    - Add fade-to-red color transition for error states
+    - _Requirements: 7.2, 5.3_
+  - [ ] 12.2 Add retry functionality
+    - Create retry button component
+    - Implement retry action that re-queues failed job
+    - Show retry attempt count
+    - Disable retry after max attempts reached
+    - _Requirements: 7.3, 7.4_
+  - [ ] 12.3 Implement error recovery UI
+    - Display suggested actions for different error types
+    - Show partial results when available after errors
+    - Allow users to continue with partial data
+    - _Requirements: 7.2, 7.5_
+
+- [ ] 13. Build data export functionality
+  - [ ] 13.1 Create export API endpoints
+    - Implement GET /api/documents/:id/export?format=json endpoint
+    - Implement GET /api/documents/:id/export?format=csv endpoint
+    - Implement GET /api/documents/:id/export?format=pdf endpoint
+    - Generate files in requested format within 5 seconds
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [ ] 13.2 Build export UI component
+    - Create export button with format dropdown
+    - Implement download trigger with file save dialog
+    - Show download progress animation
+    - Display success confirmation with animation
+    - _Requirements: 8.4, 8.5_
+
+- [ ] 14. Implement responsive design and styling
+  - [ ] 14.1 Create responsive layouts
+    - Implement mobile-friendly layouts for all components
+    - Add breakpoint-based layout adjustments
+    - Ensure touch-friendly interactions on mobile
+    - Test on various screen sizes
+    - _Requirements: 5.5_
+  - [ ] 14.2 Apply design system and theming
+    - Define color palette, typography, and spacing tokens
+    - Create reusable styled components
+    - Implement consistent button and input styles
+    - Add hover and focus states with transitions
+    - _Requirements: 5.2, 5.3_
+  - [ ] 14.3 Optimize animation performance
+    - Use CSS transforms and opacity for animations
+    - Implement will-change hints for animated elements
+    - Monitor and maintain 60fps animation performance
+    - Add performance profiling for animation-heavy views
+    - _Requirements: 5.1, 5.3_
+
+- [ ] 15. Add accessibility features
+  - [ ] 15.1 Implement keyboard navigation
+    - Add keyboard shortcuts for common actions
+    - Ensure all interactive elements are keyboard accessible
+    - Implement focus management for modals and panels
+    - Add visible focus indicators
+    - _Requirements: 5.3_
+  - [ ] 15.2 Add ARIA labels and screen reader support
+    - Add ARIA labels to all interactive elements
+    - Implement live regions for dynamic content updates
+    - Add alt text for icons and images
+    - Test with screen readers
+    - _Requirements: 5.3_
+  - [ ] 15.3 Support reduced motion preferences
+    - Detect prefers-reduced-motion media query
+    - Disable or simplify animations when reduced motion is preferred
+    - Provide instant transitions as fallback
+    - _Requirements: 5.1, 5.3_
+
+- [ ] 16. Integrate end-to-end workflow
+  - [ ] 16.1 Connect all components into main application
+    - Create main App component with routing
+    - Wire up upload, processing, and results views
+    - Implement navigation between views
+    - Add loading states and error boundaries
+    - _Requirements: 1.1, 2.1, 4.1_
+  - [ ] 16.2 Test complete user flow
+    - Test upload → processing → results → export flow
+    - Verify WebSocket updates work correctly
+    - Test error scenarios and recovery
+    - Verify animations play smoothly throughout
+    - _Requirements: 1.1, 2.1, 2.5, 4.1, 8.1_
+  - [ ] 16.3 Add demo mode with sample data
+    - Create sample medical documents for testing
+    - Implement demo mode that simulates processing
+    - Add sample extraction results
+    - Allow users to explore UI without real processing
+    - _Requirements: 1.1, 2.1, 4.1_
