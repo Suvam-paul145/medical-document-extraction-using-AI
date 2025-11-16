@@ -12,7 +12,8 @@ import { MedicalExtractionAgent } from './extractionAgent.js'
 export async function processDocument(document, onProgress, emitItemExtracted = null) {
   const startTime = Date.now()
   let documentText = ''
-  const apiKey = document.apiKey
+  // Use provided API key or fallback to environment variable
+  const apiKey = document.apiKey || process.env.OPENROUTER_API_KEY
 
   try {
     // Stage 1: Extract text from document
@@ -77,7 +78,7 @@ export async function processDocument(document, onProgress, emitItemExtracted = 
     let result = null
 
     if (!apiKey) {
-      throw new Error('OpenAI API key is required. Please configure it in settings.')
+      throw new Error('OpenRouter API key is required. Please configure OPENROUTER_API_KEY in environment or provide it in the request.')
     }
 
     // Use agentic extraction with progress callbacks

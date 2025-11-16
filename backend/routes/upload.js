@@ -54,15 +54,15 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       })
     }
 
-    // Get API key from form data or header
-    const apiKey = req.body.apiKey || req.headers['x-api-key']
+    // Get API key from form data, header, or environment
+    const apiKey = req.body.apiKey || req.headers['x-api-key'] || process.env.OPENROUTER_API_KEY
     
     if (!apiKey) {
       return res.status(401).json({
         success: false,
         error: {
           code: 'NO_API_KEY',
-          message: 'OpenAI API key is required. Please configure it in settings.'
+          message: 'OpenRouter API key is required. Please configure OPENROUTER_API_KEY in environment or provide it in the request.'
         }
       })
     }

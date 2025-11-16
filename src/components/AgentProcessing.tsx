@@ -109,7 +109,7 @@ export default function AgentProcessing({
                       completedStages.includes(stage.id)
                         ? '#16a34a'
                         : currentStage?.stage === stage.id
-                          ? 'var(--color-medical-600)'
+                          ? '#2563eb'
                           : '#e2e8f0'
                   }}
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"

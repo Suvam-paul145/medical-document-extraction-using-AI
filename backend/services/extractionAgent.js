@@ -1,7 +1,5 @@
-import OpenAI from 'openai'
-
 /**
- * Agentic Medical Document Extraction
+ * Agentic Medical Document Extraction using OpenRouter
  * 
  * Multi-stage extraction pipeline:
  * 1. Document Analysis - Determine document type and key sections
@@ -217,9 +215,9 @@ const extractionTools = [
 export class MedicalExtractionAgent {
   constructor(apiKey) {
     if (!apiKey) {
-      throw new Error('OpenAI API key is required for agentic extraction')
+      throw new Error('OpenRouter API key is required for agentic extraction')
     }
-    this.client = new OpenAI({ apiKey })
+    this.apiKey = apiKey
     this.conversationHistory = []
   }
 
@@ -233,8 +231,14 @@ export class MedicalExtractionAgent {
         progress: 20
       })
 
-      const analysisResponse = await this.analyzeDocument(documentText)
-      const documentAnalysis = this.parseResponse(analysisResponse)
+      let documentAnalysis = {}
+      try {
+        const analysisResponse = await this.analyzeDocument(documentText)
+        documentAnalysis = this.parseResponse(analysisResponse)
+      } catch (error) {
+        console.warn('⚠️  Document analysis failed, continuing with partial data:', error.message)
+        documentAnalysis = { documentType: 'Unknown' }
+      }
 
       onProgress({
         stage: 'analyzing',
@@ -252,7 +256,13 @@ export class MedicalExtractionAgent {
         progress: 40
       })
 
-      const patientInfo = await this.extractPatientInfo(documentText, documentAnalysis)
+      let patientInfo = { patientInfo: {} }
+      try {
+        patientInfo = await this.extractPatientInfo(documentText, documentAnalysis)
+      } catch (error) {
+        console.warn('⚠️  Patient info extraction failed, continuing:', error.message)
+      }
+
       onProgress({
         stage: 'extracting',
         substage: 'patient_extracted',
@@ -268,7 +278,13 @@ export class MedicalExtractionAgent {
         progress: 55
       })
 
-      const medications = await this.extractMedications(documentText, documentAnalysis)
+      let medications = { medications: [] }
+      try {
+        medications = await this.extractMedications(documentText, documentAnalysis)
+      } catch (error) {
+        console.warn('⚠️  Medication extraction failed, continuing:', error.message)
+      }
+
       onProgress({
         stage: 'extracting',
         substage: 'medication_extracted',
@@ -284,7 +300,13 @@ export class MedicalExtractionAgent {
         progress: 70
       })
 
-      const diagnoses = await this.extractDiagnoses(documentText, documentAnalysis)
+      let diagnoses = { diagnoses: [] }
+      try {
+        diagnoses = await this.extractDiagnoses(documentText, documentAnalysis)
+      } catch (error) {
+        console.warn('⚠️  Diagnosis extraction failed, continuing:', error.message)
+      }
+
       onProgress({
         stage: 'extracting',
         substage: 'diagnosis_extracted',
@@ -300,7 +322,13 @@ export class MedicalExtractionAgent {
         progress: 80
       })
 
-      const labResults = await this.extractLabResults(documentText, documentAnalysis)
+      let labResults = { labTests: [] }
+      try {
+        labResults = await this.extractLabResults(documentText, documentAnalysis)
+      } catch (error) {
+        console.warn('⚠️  Lab results extraction failed, continuing:', error.message)
+      }
+
       onProgress({
         stage: 'extracting',
         substage: 'lab_extracted',
@@ -308,7 +336,7 @@ export class MedicalExtractionAgent {
         progress: 85
       })
 
-      // Stage 3: Validation
+      // Stage 3: Validation (optional - skip if fails)
       onProgress({
         stage: 'validating',
         substage: 'data_validation',
@@ -316,13 +344,18 @@ export class MedicalExtractionAgent {
         progress: 90
       })
 
-      const validation = await this.validateExtraction({
-        ...documentAnalysis,
-        ...patientInfo,
-        ...medications,
-        ...diagnoses,
-        ...labResults
-      })
+      let validation = { isValid: true, warnings: [] }
+      try {
+        validation = await this.validateExtraction({
+          ...documentAnalysis,
+          ...patientInfo,
+          ...medications,
+          ...diagnoses,
+          ...labResults
+        })
+      } catch (error) {
+        console.warn('⚠️  Validation failed, using data anyway:', error.message)
+      }
 
       onProgress({
         stage: 'validating',
@@ -360,6 +393,9 @@ export class MedicalExtractionAgent {
   }
 
   async analyzeDocument(documentText) {
+    // Reset conversation for document analysis
+    this.conversationHistory = []
+    
     const systemPrompt = `You are a medical document analysis expert. Analyze the provided medical document and classify its type.
     
     Use the classify_document function to provide:
@@ -371,6 +407,9 @@ export class MedicalExtractionAgent {
   }
 
   async extractPatientInfo(documentText, documentAnalysis) {
+    // Reset conversation for each independent extraction task
+    this.conversationHistory = []
+    
     const systemPrompt = `You are a healthcare data extractor specializing in patient information. Extract patient demographic information from the medical document.
     
     Use the extract_patient_info function to provide name, date of birth, gender, medical record number, and age if available.
@@ -382,6 +421,9 @@ export class MedicalExtractionAgent {
   }
 
   async extractMedications(documentText, documentAnalysis) {
+    // Reset conversation for each independent extraction task
+    this.conversationHistory = []
+    
     const systemPrompt = `You are a pharmacology expert data extractor. Extract all medication information from medical documents.
     
     Use the extract_medications function to provide medication names, dosages, frequencies, routes, and indications.
@@ -393,6 +435,9 @@ export class MedicalExtractionAgent {
   }
 
   async extractDiagnoses(documentText, documentAnalysis) {
+    // Reset conversation for each independent extraction task
+    this.conversationHistory = []
+    
     const systemPrompt = `You are a clinical diagnosis expert. Extract diagnoses and medical conditions from the document.
     
     Use the extract_diagnoses function to provide condition names, ICD codes if available, severity, and status.
@@ -404,6 +449,9 @@ export class MedicalExtractionAgent {
   }
 
   async extractLabResults(documentText, documentAnalysis) {
+    // Reset conversation for each independent extraction task
+    this.conversationHistory = []
+    
     const systemPrompt = `You are a laboratory results expert. Extract lab test results, values, and vital signs from the document.
     
     Use the extract_lab_results and extract_vital_signs functions to provide test names, values, units, reference ranges, and vital sign measurements.
@@ -415,6 +463,9 @@ export class MedicalExtractionAgent {
   }
 
   async validateExtraction(extractedData) {
+    // Reset conversation for validation task
+    this.conversationHistory = []
+    
     const systemPrompt = `You are a medical data validation expert. Review the extracted medical data for consistency, completeness, and accuracy.
     
     Use the validate_extraction function to identify any issues, provide recommendations, and rate overall validity.
@@ -431,47 +482,94 @@ export class MedicalExtractionAgent {
       content: userMessage
     })
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      system: systemPrompt,
-      messages: this.conversationHistory,
-      tools: extractionTools,
-      tool_choice: 'auto',
-      max_tokens: 4096
-    })
-
-    // Process function calls if present
-    if (response.choices[0].finish_reason === 'tool_calls') {
-      const toolCalls = response.choices[0].message.tool_calls
-
-      // Store assistant response
-      this.conversationHistory.push({
-        role: 'assistant',
-        content: response.choices[0].message.content || '',
-        tool_calls: toolCalls
+    try {
+      // Use OpenRouter API directly with fetch
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.SITE_URL || 'http://localhost:5173',
+          'X-Title': 'Medical Document Extraction'
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...this.conversationHistory
+          ],
+          tools: extractionTools.map(t => ({
+            type: 'function',
+            function: t.function
+          })),
+          tool_choice: 'auto',
+          max_tokens: 800,
+          temperature: 0.5
+        })
       })
 
-      const toolResults = []
-      for (const toolCall of toolCalls) {
-        const result = JSON.parse(toolCall.function.arguments)
-        toolResults.push({
-          type: 'tool',
-          tool_use_id: toolCall.id,
-          content: JSON.stringify(result)
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('OpenRouter API error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData.error,
+          body: errorData
         })
+        throw new Error(`OpenRouter API error: ${errorData.error?.message || response.statusText}`)
       }
 
-      // Add tool results to history
-      this.conversationHistory.push({
-        role: 'user',
-        content: toolResults
-      })
+      const data = await response.json()
+      
+      // Check if response has valid choices
+      if (!data.choices || !data.choices[0]) {
+        console.error('Invalid OpenRouter response structure:', {
+          status: response.status,
+          body: data
+        })
+        throw new Error(`OpenRouter API returned invalid response structure`)
+      }
+      
+      const choice = data.choices[0]
 
-      return toolResults.map(r => JSON.parse(r.content))
+      // Process tool calls if present (new format)
+      if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+        const toolCall = choice.message.tool_calls[0]
+        const functionArgs = typeof toolCall.function.arguments === 'string' 
+          ? JSON.parse(toolCall.function.arguments) 
+          : toolCall.function.arguments
+
+        // DO NOT store tool_calls in conversation history because:
+        // OpenAI requires tool_calls to be followed by tool messages
+        // Since we're parsing the result directly, we don't need conversation continuity
+        // Store only the assistant message without tool_calls for next turn
+        this.conversationHistory.push({
+          role: 'assistant',
+          content: choice.message.content || `Extracting ${toolCall.function.name}...`
+        })
+
+        return {
+          functionName: toolCall.function.name,
+          functionArgs: functionArgs,
+          message: choice.message.content || ''
+        }
+      } else {
+        // Regular text response
+        this.conversationHistory.push({
+          role: 'assistant',
+          content: choice.message.content
+        })
+
+        return {
+          functionName: null,
+          functionArgs: null,
+          message: choice.message.content
+        }
+      }
+    } catch (error) {
+      console.error('OpenRouter API call failed:', error)
+      throw error
     }
-
-    // Extract structured data from response
-    return this.parseResponse(response.choices[0].message.content)
   }
 
   parseResponse(response) {

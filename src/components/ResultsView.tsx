@@ -95,9 +95,9 @@ export default function ResultsView() {
           <div className="flex">
             {[
               { id: 'patient', label: 'Patient Info', icon: '👤' },
-              { id: 'medications', label: 'Medications', icon: '💊', count: extractionResult.medications.length },
-              { id: 'diagnoses', label: 'Diagnoses', icon: '🏥', count: extractionResult.diagnoses.length },
-              { id: 'labs', label: 'Lab Results', icon: '🧪', count: extractionResult.labResults.length }
+              { id: 'medications', label: 'Medications', icon: '💊', count: (extractionResult.medications || []).length },
+              { id: 'diagnoses', label: 'Diagnoses', icon: '🏥', count: (extractionResult.diagnoses || []).length },
+              { id: 'labs', label: 'Lab Results', icon: '🧪', count: (extractionResult.labResults || []).length }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -159,7 +159,8 @@ export default function ResultsView() {
               animate={{ opacity: 1, x: 0 }}
               className="space-y-4"
             >
-              {extractionResult.medications.map((med, index) => (
+              {(extractionResult.medications || []).length > 0 ? (
+                (extractionResult.medications || []).map((med, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 20 }}
@@ -196,7 +197,12 @@ export default function ResultsView() {
                     )}
                   </div>
                 </motion.div>
-              ))}
+              ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No medications found in the document
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -206,7 +212,8 @@ export default function ResultsView() {
               animate={{ opacity: 1, x: 0 }}
               className="space-y-4"
             >
-              {extractionResult.diagnoses.map((diag, index) => (
+              {(extractionResult.diagnoses || []).length > 0 ? (
+                (extractionResult.diagnoses || []).map((diag, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 20 }}
@@ -235,7 +242,12 @@ export default function ResultsView() {
                     )}
                   </div>
                 </motion.div>
-              ))}
+              ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No diagnoses found in the document
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -245,7 +257,8 @@ export default function ResultsView() {
               animate={{ opacity: 1, x: 0 }}
               className="space-y-4"
             >
-              {extractionResult.labResults.map((lab, index) => (
+              {(extractionResult.labResults || []).length > 0 ? (
+                (extractionResult.labResults || []).map((lab, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 20 }}
@@ -283,7 +296,12 @@ export default function ResultsView() {
                     )}
                   </div>
                 </motion.div>
-              ))}
+              ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No lab results found in the document
+                </div>
+              )}
             </motion.div>
           )}
         </div>
