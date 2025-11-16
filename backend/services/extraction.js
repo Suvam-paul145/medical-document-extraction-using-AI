@@ -4,10 +4,12 @@ import pdfParse from 'pdf-parse'
 import { extractTextFromImage, isImage } from './ocr.js'
 import { extractMedicalData } from './aiExtraction.js'
 import { MedicalExtractionAgent } from './extractionAgent.js'
+import { DocumentFormat } from './formatAdapter.js'
 
 /**
  * Process a medical document and extract structured data
  * Uses real AI extraction if available, falls back to demo mode
+ * Automatically detects document format and normalizes output
  */
 export async function processDocument(document, onProgress, emitItemExtracted = null) {
   const startTime = Date.now()
@@ -146,14 +148,24 @@ export async function processDocument(document, onProgress, emitItemExtracted = 
       result.processingTime = Date.now() - startTime
       result.extractionMethod = 'AI-powered'
 
+      // INTELLIGENT FORMAT DETECTION & ADAPTATION
+      const detectedFormat = DocumentFormat.detect(result, documentText)
+      const normalizedResult = DocumentFormat.normalize(result, detectedFormat)
+      const cleanedResult = DocumentFormat.cleanup(normalizedResult, detectedFormat)
+      const displayResult = DocumentFormat.formatForDisplay(cleanedResult, detectedFormat)
+
       onProgress({
         documentId: document.id,
         stage: 'validating',
         progress: 100,
-        currentActivity: 'Extraction complete!'
+        currentActivity: `Extraction complete! Detected format: ${detectedFormat.name}`
       })
 
-      return result
+      return {
+        ...cleanedResult,
+        displayFormat: displayResult,
+        detectedFormat: detectedFormat.id
+      }
     }
   }
 
@@ -298,7 +310,18 @@ async function getDemoResult(documentId, startTime, onProgress, emitItemExtracte
   }
 
   result.processingTime = Date.now() - startTime
-  return result
+  
+  // Apply format detection and normalization to demo results
+  const detectedFormat = DocumentFormat.detect(result, '')
+  const normalizedResult = DocumentFormat.normalize(result, detectedFormat)
+  const cleanedResult = DocumentFormat.cleanup(normalizedResult, detectedFormat)
+  const displayResult = DocumentFormat.formatForDisplay(cleanedResult, detectedFormat)
+  
+  return {
+    ...cleanedResult,
+    displayFormat: displayResult,
+    detectedFormat: detectedFormat.id
+  }
 }
 
 async function simulateItemExtraction(documentId, result, emitItemExtracted) {
