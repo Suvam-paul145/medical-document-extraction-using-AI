@@ -61,8 +61,13 @@ io.on('connection', (socket) => {
   })
 })
 
-// Initialize job queue
-initializeQueue(io)
+// Initialize job queue (with error handling to prevent crashes)
+try {
+  initializeQueue(io)
+} catch (error) {
+  console.error('Queue initialization error:', error.message)
+  console.log('📦 Falling back to in-memory queue')
+}
 
 const PORT = process.env.PORT || 5000
 

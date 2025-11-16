@@ -11,13 +11,17 @@ const api = axios.create({
   }
 })
 
-export async function uploadDocument(file: File, onProgress?: (progress: number) => void): Promise<UploadDocumentResponse> {
+export async function uploadDocument(file: File, onProgress?: (progress: number) => void, apiKey?: string): Promise<UploadDocumentResponse> {
   const formData = new FormData()
   formData.append('document', file)
+  if (apiKey) {
+    formData.append('apiKey', apiKey)
+  }
 
   const response = await api.post<UploadDocumentResponse>('/documents/upload', formData, {
     headers: {
-      'Content-Type': 'multipart/form-data'
+      'Content-Type': 'multipart/form-data',
+      ...(apiKey && { 'X-API-Key': apiKey })
     },
     onUploadProgress: (progressEvent) => {
       if (progressEvent.total && onProgress) {

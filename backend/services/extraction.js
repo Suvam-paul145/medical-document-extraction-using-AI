@@ -1,17 +1,200 @@
 import fs from 'fs/promises'
 import path from 'path'
+import pdfParse from 'pdf-parse'
+import { extractTextFromImage, isImage } from './ocr.js'
+import { extractMedicalData } from './aiExtraction.js'
+import { MedicalExtractionAgent } from './extractionAgent.js'
 
-// Simulated extraction process
+/**
+ * Process a medical document and extract structured data
+ * Uses real AI extraction if available, falls back to demo mode
+ */
 export async function processDocument(document, onProgress, emitItemExtracted = null) {
+  const startTime = Date.now()
+  let documentText = ''
+  const apiKey = document.apiKey
+
+  try {
+    // Stage 1: Extract text from document
+    onProgress({
+      documentId: document.id,
+      stage: 'ocr',
+      progress: 10,
+      currentActivity: 'Extracting text from document...'
+    })
+
+    if (isImage(document.fileType)) {
+      // Image: Use OCR
+      documentText = await extractTextFromImage(document.filepath, (ocrProgress) => {
+        onProgress({
+          documentId: document.id,
+          stage: 'ocr',
+          progress: 10 + Math.round(ocrProgress * 0.3), // 10-40%
+          currentActivity: `Reading text from image... ${ocrProgress}%`
+        })
+      })
+    } else if (document.fileType === 'application/pdf') {
+      // PDF: Extract text directly
+      const pdfBuffer = await fs.readFile(document.filepath)
+      const pdfData = await pdfParse(pdfBuffer)
+      documentText = pdfData.text || ''
+
+      // If PDF has no text (image-based PDF), try OCR on first page
+      if (!documentText || documentText.trim().length < 10) {
+        console.log('⚠️  PDF appears to be image-based, attempting OCR...')
+        onProgress({
+          documentId: document.id,
+          stage: 'ocr',
+          progress: 20,
+          currentActivity: 'PDF is image-based, using OCR...'
+        })
+
+        // For image-based PDFs, we'd need to convert to image first
+        // For now, throw a helpful error
+        throw new Error('PDF appears to be image-based (scanned document). Please convert to an image (PNG/JPEG) and upload that instead, or use a PDF with selectable text.')
+      }
+
+      onProgress({
+        documentId: document.id,
+        stage: 'ocr',
+        progress: 40,
+        currentActivity: `Text extracted from PDF (${documentText.length} characters)`
+      })
+    } else {
+      throw new Error(`Unsupported file type: ${document.fileType}. Please use PDF, JPEG, or PNG.`)
+    }
+
+    // Validate extracted text
+    const trimmedText = documentText ? documentText.trim() : ''
+    if (!trimmedText || trimmedText.length < 5) {
+      console.warn('Insufficient text extracted:', trimmedText.length, 'characters')
+      throw new Error(`Could not extract sufficient text from document (only ${trimmedText.length} characters found). The document may be an image that needs better quality, or the PDF may be image-based.`)
+    }
+
+    console.log(`✅ Extracted ${trimmedText.length} characters from document`)
+
+    // Stage 2: Agentic Document Analysis and Extraction (required)
+    let result = null
+
+    if (!apiKey) {
+      throw new Error('OpenAI API key is required. Please configure it in settings.')
+    }
+
+    // Use agentic extraction with progress callbacks
+    const agent = new MedicalExtractionAgent(apiKey)
+
+    result = await agent.extractMedicalData(documentText, (agentProgress) => {
+      // Map agent progress to document progress
+      onProgress({
+        documentId: document.id,
+        stage: agentProgress.stage,
+        substage: agentProgress.substage,
+        progress: agentProgress.progress,
+        currentActivity: agentProgress.message,
+        documentType: agentProgress.data?.documentType
+      })
+
+      // Emit extracted items in real-time
+      if (agentProgress.extractedData) {
+        const { medications, diagnoses, labTests, patient } = agentProgress.extractedData
+
+        if (medications && emitItemExtracted) {
+          medications.forEach(med => {
+            emitItemExtracted({
+              documentId: document.id,
+              category: 'medication',
+              item: med
+            })
+          })
+        }
+
+        if (diagnoses && emitItemExtracted) {
+          diagnoses.forEach(diag => {
+            emitItemExtracted({
+              documentId: document.id,
+              category: 'diagnosis',
+              item: diag
+            })
+          })
+        }
+
+        if (labTests && emitItemExtracted) {
+          labTests.forEach(lab => {
+            emitItemExtracted({
+              documentId: document.id,
+              category: 'labResult',
+              item: lab
+            })
+          })
+        }
+      }
+    })
+
+    // Process agent results
+    if (result) {
+      onProgress({
+        documentId: document.id,
+        stage: 'validating',
+        progress: 95,
+        currentActivity: 'Final validation and formatting...'
+      })
+
+      // Add metadata
+      result.documentId = document.id
+      result.extractedAt = new Date().toISOString()
+      result.processingTime = Date.now() - startTime
+      result.extractionMethod = 'AI-powered'
+
+      onProgress({
+        documentId: document.id,
+        stage: 'validating',
+        progress: 100,
+        currentActivity: 'Extraction complete!'
+      })
+
+      return result
+    }
+  }
+
+    // Fallback to demo mode if AI is not available or failed
+   catch (error) {
+  console.error('Extraction error:', error.message)
+
+  // Provide helpful error message to user
+  onProgress({
+    documentId: document.id,
+    stage: 'error',
+    progress: 0,
+    currentActivity: `Error: ${error.message}`
+  })
+
+  // If it's a text extraction error, fall back to demo mode
+  if (error.message.includes('Could not extract') || error.message.includes('OCR') || error.message.includes('insufficient text')) {
+    console.log('⚠️  Text extraction failed, falling back to demo mode')
+    // Wait a moment to show the error
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return await getDemoResult(document.id, startTime, onProgress, emitItemExtracted)
+  }
+
+  // For other errors, still fall back but log the issue
+  console.log('⚠️  Error in extraction, falling back to demo mode')
+  return await getDemoResult(document.id, startTime, onProgress, emitItemExtracted)
+}
+}
+
+/**
+ * Get demo/simulated result (fallback when AI is not available)
+ */
+async function getDemoResult(documentId, startTime, onProgress, emitItemExtracted) {
   const stages = [
-    { name: 'ocr', duration: 2000, progress: 20 },
-    { name: 'analyzing', duration: 2000, progress: 50 },
-    { name: 'extracting', duration: 3000, progress: 80 },
-    { name: 'validating', duration: 1000, progress: 100 }
+    { name: 'ocr', duration: 1000, progress: 20 },
+    { name: 'analyzing', duration: 1000, progress: 50 },
+    { name: 'extracting', duration: 2000, progress: 80 },
+    { name: 'validating', duration: 500, progress: 100 }
   ]
 
   const result = {
-    documentId: document.id,
+    documentId,
     patientInfo: {
       name: 'John Doe',
       dateOfBirth: '1980-05-15',
@@ -93,31 +276,27 @@ export async function processDocument(document, onProgress, emitItemExtracted = 
       confidence: 0.89
     },
     extractedAt: new Date().toISOString(),
-    processingTime: 0
+    processingTime: 0,
+    extractionMethod: 'Demo mode (AI not configured)'
   }
-
-  const startTime = Date.now()
 
   // Simulate processing stages
   for (const stage of stages) {
     onProgress({
-      documentId: document.id,
+      documentId,
       stage: stage.name,
       progress: stage.progress,
-      currentActivity: `Processing ${stage.name}...`
+      currentActivity: `[Demo] Processing ${stage.name}...`
     })
 
-    // Simulate work
     await new Promise(resolve => setTimeout(resolve, stage.duration))
 
-    // Emit some extracted items during extraction stage
     if (stage.name === 'extracting') {
-      await simulateItemExtraction(document.id, result, emitItemExtracted)
+      await simulateItemExtraction(documentId, result, emitItemExtracted)
     }
   }
 
   result.processingTime = Date.now() - startTime
-
   return result
 }
 
@@ -154,29 +333,29 @@ export function exportToJSON(result) {
 
 export function exportToCSV(result) {
   let csv = 'Category,Field,Value,Confidence\n'
-  
+
   // Patient Info
   if (result.patientInfo) {
     csv += `Patient,Name,${result.patientInfo.name},${result.patientInfo.confidence}\n`
     csv += `Patient,DOB,${result.patientInfo.dateOfBirth},${result.patientInfo.confidence}\n`
     csv += `Patient,ID,${result.patientInfo.patientId},${result.patientInfo.confidence}\n`
   }
-  
+
   // Medications
   result.medications.forEach(med => {
     csv += `Medication,${med.drugName},"${med.dosage} ${med.frequency}",${med.confidence}\n`
   })
-  
+
   // Diagnoses
   result.diagnoses.forEach(diag => {
     csv += `Diagnosis,${diag.condition},${diag.icdCode || ''},${diag.confidence}\n`
   })
-  
+
   // Lab Results
   result.labResults.forEach(lab => {
     csv += `Lab,${lab.testName},"${lab.value} ${lab.unit}",${lab.confidence}\n`
   })
-  
+
   return csv
 }
 

@@ -9,54 +9,66 @@ let isProcessing = false
 export function initializeQueue(io) {
   ioInstance = io
   
-  // Try to create queue with Redis, fallback to in-memory if Redis is not available
-  try {
-    processingQueue = new Queue('document-processing', {
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379,
-        maxRetriesPerRequest: null,
-        enableReadyCheck: false,
-        retryStrategy: () => null // Don't retry if Redis is unavailable
-      },
-      settings: {
-        maxStalledCount: 3,
-        stalledInterval: 30000
-      }
-    })
+  // For demo purposes, skip Redis entirely and use in-memory queue by default
+  // This avoids connection errors and makes the system work out of the box
+  // Only use Redis if explicitly enabled via environment variable
+  const useRedis = process.env.USE_REDIS === 'true'
+  
+  if (useRedis && process.env.REDIS_HOST) {
+    // Only try Redis if explicitly enabled
+    try {
+      processingQueue = new Queue('document-processing', {
+        redis: {
+          host: process.env.REDIS_HOST || 'localhost',
+          port: process.env.REDIS_PORT || 6379,
+          maxRetriesPerRequest: null,
+          enableReadyCheck: false,
+          retryStrategy: () => null,
+          connectTimeout: 2000, // Fast timeout
+          lazyConnect: false
+        },
+        settings: {
+          maxStalledCount: 3,
+          stalledInterval: 30000
+        }
+      })
 
-    // Process jobs
-    processingQueue.process(async (job) => {
-      return await processJob(job.data)
-    })
+      // Process jobs
+      processingQueue.process(async (job) => {
+        return await processJob(job.data)
+      })
 
-    // Handle job events
-    processingQueue.on('failed', (job, err) => {
-      console.error(`Job ${job.id} failed:`, err.message)
-    })
+      // Handle job events
+      processingQueue.on('failed', (job, err) => {
+        console.error(`Job ${job.id} failed:`, err.message)
+      })
 
-    processingQueue.on('completed', (job) => {
-      console.log(`Job ${job.id} completed successfully`)
-    })
+      processingQueue.on('completed', (job) => {
+        console.log(`Job ${job.id} completed successfully`)
+      })
 
-    processingQueue.on('error', (error) => {
-      console.warn('⚠️  Redis connection failed, falling back to in-memory queue:', error.message)
+      // Handle connection errors gracefully
+      processingQueue.on('error', (error) => {
+        // Suppress the error, we'll use in-memory queue
+        console.warn('⚠️  Redis connection failed, using in-memory queue')
+        processingQueue = null
+        if (!isProcessing) {
+          processInMemoryQueue()
+        }
+      })
+
+      console.log('✅ Attempting to use Redis queue...')
+    } catch (error) {
+      console.warn('⚠️  Redis initialization failed, using in-memory queue:', error.message)
       processingQueue = null
-      // Start in-memory processing when Redis fails
-      if (!isProcessing) {
-        processInMemoryQueue()
-      }
-    })
-
-    console.log('✅ Job queue initialized (will use Redis if available)')
-  } catch (error) {
-    console.warn('⚠️  Redis not available, using in-memory queue:', error.message)
+    }
+  } else {
+    console.log('📦 Using in-memory job queue (Redis disabled - perfect for demo!)')
     processingQueue = null
   }
 
-  // Start processing in-memory queue if Redis is not available
+  // Always start in-memory queue processing
   if (!processingQueue) {
-    console.log('📦 Using in-memory job queue (no Redis required for demo)')
     processInMemoryQueue()
   }
 }

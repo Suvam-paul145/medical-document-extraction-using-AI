@@ -54,6 +54,19 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       })
     }
 
+    // Get API key from form data or header
+    const apiKey = req.body.apiKey || req.headers['x-api-key']
+    
+    if (!apiKey) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'NO_API_KEY',
+          message: 'OpenAI API key is required. Please configure it in settings.'
+        }
+      })
+    }
+
     // Validate file
     const validation = validateFile(req.file)
     if (!validation.valid) {
@@ -70,6 +83,9 @@ router.post('/upload', upload.single('document'), async (req, res) => {
     // Create document record
     const documentId = uuidv4()
     const document = createDocumentRecord(documentId, req.file)
+    
+    // Store API key with document for use during processing
+    document.apiKey = apiKey
 
     // Add to processing queue
     const job = await addProcessingJob(document)
