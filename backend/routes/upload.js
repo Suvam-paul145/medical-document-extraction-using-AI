@@ -4,7 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 import { validateFile, createDocumentRecord } from '../services/validation.js'
-import { addProcessingJob } from '../services/queue.js'
+import { addProcessingJob, getExtractionResult, getExtractionResultFormatted, getAllExtractionResults, getGatewayStats } from '../services/queue.js'
 
 const router = express.Router()
 
@@ -113,19 +113,85 @@ router.post('/upload', upload.single('document'), async (req, res) => {
 router.get('/:documentId/result', async (req, res) => {
   try {
     const { documentId } = req.params
+    const { format = 'json' } = req.query
     
-    // In a real app, fetch from database
-    // For now, return mock response
-    res.json({
-      success: true,
-      message: 'Result endpoint - to be implemented with database'
-    })
+    const result = getExtractionResult(documentId, format)
+    
+    if (!result || !result.success) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'RESULT_NOT_FOUND',
+          message: `No result found for document ${documentId}. The document may still be processing or does not exist.`
+        }
+      })
+    }
+
+    res.json(result)
   } catch (error) {
     res.status(500).json({
       success: false,
       error: {
         code: 'FETCH_FAILED',
         message: 'Failed to fetch extraction result'
+      }
+    })
+  }
+})
+
+// Get formatted result for frontend display
+router.get('/:documentId/formatted', async (req, res) => {
+  try {
+    const { documentId } = req.params
+    const { format = 'table' } = req.query
+    
+    const result = getExtractionResultFormatted(documentId, format)
+    
+    if (!result || !result.success) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'RESULT_NOT_FOUND',
+          message: 'Extraction result not found'
+        }
+      })
+    }
+
+    if (format === 'html') {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.send(result.data)
+    } else {
+      res.json(result)
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'FORMAT_FAILED',
+        message: 'Failed to format extraction result'
+      }
+    })
+  }
+})
+
+// Get all results
+router.get('/', async (req, res) => {
+  try {
+    const results = getAllExtractionResults()
+    const stats = getGatewayStats()
+    
+    res.json({
+      success: true,
+      stats,
+      resultsCount: results.length,
+      results
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'FETCH_FAILED',
+        message: 'Failed to fetch results'
       }
     })
   }

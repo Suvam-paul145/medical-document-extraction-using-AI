@@ -1,10 +1,14 @@
 import Queue from 'bull'
 import { processDocument } from './extraction.js'
+import dataGateway from './dataGateway.js'
 
 let processingQueue
 let ioInstance
 let inMemoryQueue = []
 let isProcessing = false
+
+// Store extraction results in memory (for demo purposes)
+const extractionResults = new Map()
 
 export function initializeQueue(io) {
   ioInstance = io
@@ -93,15 +97,45 @@ async function processJob(jobData) {
       emitToDocument(document.id, 'processing:item-extracted', itemData)
     })
 
-    // Emit completion
-    emitToDocument(document.id, 'processing:completed', result)
+    // Store result using intelligent data gateway
+    const storageResult = dataGateway.storeData(document.id, result, {
+      filename: document.originalname,
+      fileType: document.fileType,
+      processingTime: result.processingTime || 0,
+      apiKey: document.apiKey ? 'configured' : 'missing'
+    })
+
+    // Store result for later retrieval
+    extractionResults.set(document.id, {
+      documentId: document.id,
+      result,
+      storageId: storageResult.storageId,
+      timestamp: new Date().toISOString(),
+      processingTime: result.processingTime || 0
+    })
+
+    // Emit completion with storage info
+    emitToDocument(document.id, 'processing:completed', {
+      ...result,
+      storageId: storageResult.storageId,
+      contentType: storageResult.contentType
+    })
+
 
     return result
   } catch (error) {
     console.error('Processing error:', error)
     
+    // Store error result
+    extractionResults.set(jobData.document.id, {
+      documentId: jobData.document.id,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      success: false
+    })
+    
     // Emit error
-    emitToDocument(document.id, 'processing:error', {
+    emitToDocument(jobData.document.id, 'processing:error', {
       code: 'PROCESSING_FAILED',
       message: error.message,
       retryable: true
@@ -169,4 +203,43 @@ function emitToDocument(documentId, event, data) {
   if (ioInstance) {
     ioInstance.to(`document:${documentId}`).emit(event, data)
   }
+}
+
+export function getExtractionResult(documentId, format = 'json') {
+  const result = extractionResults.get(documentId)
+  if (!result) return null
+  
+  // Use data gateway to format the result
+  return dataGateway.retrieveData(documentId, format)
+}
+
+export function getExtractionResultFormatted(documentId, format = 'table') {
+  const result = extractionResults.get(documentId)
+  if (!result) return null
+  
+  return dataGateway.retrieveData(documentId, format)
+}
+
+export function getAllExtractionResults(format = 'json') {
+  const results = Array.from(extractionResults.values())
+  return results.map(r => ({
+    documentId: r.documentId,
+    storageId: r.storageId,
+    timestamp: r.timestamp,
+    processingTime: r.processingTime,
+    formats: {
+      json: dataGateway.retrieveData(r.documentId, 'json'),
+      table: dataGateway.retrieveData(r.documentId, 'table'),
+      html: dataGateway.retrieveData(r.documentId, 'html')
+    }
+  }))
+}
+
+export function clearExtractionResult(documentId) {
+  extractionResults.delete(documentId)
+  dataGateway.deleteData(documentId)
+}
+
+export function getGatewayStats() {
+  return dataGateway.getStats()
 }

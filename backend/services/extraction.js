@@ -5,6 +5,7 @@ import { extractTextFromImage, isImage } from './ocr.js'
 import { extractMedicalData } from './aiExtraction.js'
 import { MedicalExtractionAgent } from './extractionAgent.js'
 import { DocumentFormat } from './formatAdapter.js'
+import DataNormalizer from './dataNormalizer.js'
 
 /**
  * Process a medical document and extract structured data
@@ -99,7 +100,8 @@ export async function processDocument(document, onProgress, emitItemExtracted = 
 
       // Emit extracted items in real-time
       if (agentProgress.extractedData) {
-        const { medications, diagnoses, labTests, patient } = agentProgress.extractedData
+        const { medications, diagnoses, labResults, labTests, patient } = agentProgress.extractedData
+        const labData = labResults || labTests // Handle both field names
 
         if (medications && emitItemExtracted) {
           medications.forEach(med => {
@@ -121,8 +123,8 @@ export async function processDocument(document, onProgress, emitItemExtracted = 
           })
         }
 
-        if (labTests && emitItemExtracted) {
-          labTests.forEach(lab => {
+        if (labData && emitItemExtracted) {
+          labData.forEach(lab => {
             emitItemExtracted({
               documentId: document.id,
               category: 'labResult',
