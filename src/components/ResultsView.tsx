@@ -6,8 +6,9 @@ import type { ExtractionResult } from '../types'
 
 export default function ResultsView() {
   const { extractionResult, reset } = useDocumentStore()
-  const [activeTab, setActiveTab] = useState<'patient' | 'medications' | 'diagnoses' | 'labs'>('patient')
+  const [activeTab, setActiveTab] = useState<'patient' | 'medications' | 'diagnoses' | 'labs' | 'json'>('patient')
   const [exporting, setExporting] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   if (!extractionResult) return null
 
@@ -18,7 +19,7 @@ export default function ResultsView() {
         documentId: extractionResult.documentId,
         format
       })
-      
+
       // Create download link
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -33,6 +34,18 @@ export default function ResultsView() {
       alert('Failed to export data')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleCopyJSON = async () => {
+    try {
+      const jsonString = JSON.stringify(extractionResult, null, 2)
+      await navigator.clipboard.writeText(jsonString)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Copy error:', error)
+      alert('Failed to copy to clipboard')
     }
   }
 
@@ -97,16 +110,16 @@ export default function ResultsView() {
               { id: 'patient', label: 'Patient Info', icon: '👤' },
               { id: 'medications', label: 'Medications', icon: '💊', count: (extractionResult.medications || []).length },
               { id: 'diagnoses', label: 'Diagnoses', icon: '🏥', count: (extractionResult.diagnoses || []).length },
-              { id: 'labs', label: 'Lab Results', icon: '🧪', count: (extractionResult.labResults || []).length }
+              { id: 'labs', label: 'Lab Results', icon: '🧪', count: (extractionResult.labResults || []).length },
+              { id: 'json', label: 'JSON Data', icon: '📋' }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors relative ${
-                  activeTab === tab.id
+                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors relative ${activeTab === tab.id
                     ? 'text-primary-600 bg-primary-50'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <span className="mr-2">{tab.icon}</span>
                 {tab.label}
@@ -161,43 +174,43 @@ export default function ResultsView() {
             >
               {(extractionResult.medications || []).length > 0 ? (
                 (extractionResult.medications || []).map((med, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="text-lg font-semibold text-gray-900">{med.drugName}</h4>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(med.confidence)}`}>
-                      {(med.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Dosage:</span>
-                      <span className="ml-2 font-medium">{med.dosage}</span>
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="text-lg font-semibold text-gray-900">{med.drugName}</h4>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(med.confidence)}`}>
+                        {(med.confidence * 100).toFixed(0)}%
+                      </span>
                     </div>
-                    <div>
-                      <span className="text-gray-500">Frequency:</span>
-                      <span className="ml-2 font-medium">{med.frequency}</span>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Dosage:</span>
+                        <span className="ml-2 font-medium">{med.dosage}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Frequency:</span>
+                        <span className="ml-2 font-medium">{med.frequency}</span>
+                      </div>
+                      {med.duration && (
+                        <div>
+                          <span className="text-gray-500">Duration:</span>
+                          <span className="ml-2 font-medium">{med.duration}</span>
+                        </div>
+                      )}
+                      {med.route && (
+                        <div>
+                          <span className="text-gray-500">Route:</span>
+                          <span className="ml-2 font-medium">{med.route}</span>
+                        </div>
+                      )}
                     </div>
-                    {med.duration && (
-                      <div>
-                        <span className="text-gray-500">Duration:</span>
-                        <span className="ml-2 font-medium">{med.duration}</span>
-                      </div>
-                    )}
-                    {med.route && (
-                      <div>
-                        <span className="text-gray-500">Route:</span>
-                        <span className="ml-2 font-medium">{med.route}</span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))
+                  </motion.div>
+                ))
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   No medications found in the document
@@ -214,35 +227,35 @@ export default function ResultsView() {
             >
               {(extractionResult.diagnoses || []).length > 0 ? (
                 (extractionResult.diagnoses || []).map((diag, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="text-lg font-semibold text-gray-900">{diag.condition}</h4>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(diag.confidence)}`}>
-                      {(diag.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    {diag.icdCode && (
-                      <div>
-                        <span className="text-gray-500">ICD Code:</span>
-                        <span className="ml-2 font-medium">{diag.icdCode}</span>
-                      </div>
-                    )}
-                    {diag.severity && (
-                      <div>
-                        <span className="text-gray-500">Severity:</span>
-                        <span className="ml-2 font-medium">{diag.severity}</span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="text-lg font-semibold text-gray-900">{diag.condition}</h4>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(diag.confidence)}`}>
+                        {(diag.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      {diag.icdCode && (
+                        <div>
+                          <span className="text-gray-500">ICD Code:</span>
+                          <span className="ml-2 font-medium">{diag.icdCode}</span>
+                        </div>
+                      )}
+                      {diag.severity && (
+                        <div>
+                          <span className="text-gray-500">Severity:</span>
+                          <span className="ml-2 font-medium">{diag.severity}</span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   No diagnoses found in the document
@@ -259,49 +272,126 @@ export default function ResultsView() {
             >
               {(extractionResult.labResults || []).length > 0 ? (
                 (extractionResult.labResults || []).map((lab, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="text-lg font-semibold text-gray-900">{lab.testName}</h4>
-                    <div className="flex items-center gap-2">
-                      {lab.status && (
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          lab.status === 'normal' ? 'bg-green-100 text-green-700' :
-                          lab.status === 'abnormal' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {lab.status}
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="text-lg font-semibold text-gray-900">{lab.testName}</h4>
+                      <div className="flex items-center gap-2">
+                        {lab.status && (
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${lab.status === 'normal' ? 'bg-green-100 text-green-700' :
+                              lab.status === 'abnormal' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                            }`}>
+                            {lab.status}
+                          </span>
+                        )}
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(lab.confidence)}`}>
+                          {(lab.confidence * 100).toFixed(0)}%
                         </span>
-                      )}
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(lab.confidence)}`}>
-                        {(lab.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Value:</span>
-                      <span className="ml-2 font-medium">{lab.value} {lab.unit}</span>
-                    </div>
-                    {lab.referenceRange && (
-                      <div>
-                        <span className="text-gray-500">Reference:</span>
-                        <span className="ml-2 font-medium">{lab.referenceRange}</span>
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Value:</span>
+                        <span className="ml-2 font-medium">{lab.value} {lab.unit}</span>
+                      </div>
+                      {lab.referenceRange && (
+                        <div>
+                          <span className="text-gray-500">Reference:</span>
+                          <span className="ml-2 font-medium">{lab.referenceRange}</span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   No lab results found in the document
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {activeTab === 'json' && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-4"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Complete Extraction Data</h3>
+                <button
+                  onClick={handleCopyJSON}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${copied
+                      ? 'bg-green-500 text-white'
+                      : 'bg-primary-500 text-white hover:bg-primary-600'
+                    }`}
+                >
+                  {copied ? (
+                    <>
+                      <span className="mr-2">✓</span>
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2">📋</span>
+                      Copy JSON
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="relative">
+                <pre className="json-viewer">
+                  <code>{JSON.stringify(extractionResult, null, 2)}</code>
+                </pre>
+              </div>
+
+              <style>{`
+                .json-viewer {
+                  background: #1e1e1e;
+                  color: #d4d4d4;
+                  padding: 20px;
+                  border-radius: 8px;
+                  overflow-x: auto;
+                  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                  font-size: 13px;
+                  line-height: 1.6;
+                  max-height: 600px;
+                  overflow-y: auto;
+                  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                }
+
+                .json-viewer code {
+                  color: #d4d4d4;
+                  white-space: pre;
+                  display: block;
+                }
+
+                .json-viewer::-webkit-scrollbar {
+                  width: 8px;
+                  height: 8px;
+                }
+
+                .json-viewer::-webkit-scrollbar-track {
+                  background: #2d2d2d;
+                  border-radius: 4px;
+                }
+
+                .json-viewer::-webkit-scrollbar-thumb {
+                  background: #555;
+                  border-radius: 4px;
+                }
+
+                .json-viewer::-webkit-scrollbar-thumb:hover {
+                  background: #666;
+                }
+              `}</style>
             </motion.div>
           )}
         </div>
